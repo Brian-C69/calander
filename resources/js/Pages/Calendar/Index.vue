@@ -50,6 +50,17 @@ const formatRange = (event) => {
     return `${fmtDate.format(start)} ${fmtTime.format(start)} → ${fmtDate.format(end)} ${fmtTime.format(end)}`;
 };
 
+const reminderLabel = (event) => {
+    const firstAtt = event.attendees?.[0];
+    const minutes = firstAtt?.reminder_offset_minutes ?? null;
+    if (!minutes) return '';
+    if (minutes >= 60) {
+        const hrs = minutes / 60;
+        return `${hrs}h before`;
+    }
+    return `${minutes}m before`;
+};
+
 const form = useForm({
     calendar_id: props.defaults.calendarId,
     title: '',
@@ -61,6 +72,21 @@ const form = useForm({
     visibility: 'household',
     category: '',
     attendees: [],
+    reminder_offset_minutes: 60,
+});
+
+const quickForm = useForm({
+    calendar_id: props.defaults.calendarId,
+    title: '',
+    start_at: props.defaults.start,
+    end_at: props.defaults.end,
+    is_all_day: false,
+    visibility: 'household',
+    category: '',
+    reminder_offset_minutes: 60,
+    attendees: [],
+    description: '',
+    location: '',
 });
 
 const filteredEvents = computed(() =>
@@ -124,7 +150,7 @@ const submit = () => {
     const payload = {
         preserveScroll: true,
         onSuccess: () => {
-            form.reset('title', 'description', 'location', 'is_all_day', 'category', 'attendees');
+            form.reset('title', 'description', 'location', 'is_all_day', 'category', 'attendees', 'reminder_offset_minutes');
             showForm.value = false;
             editingId.value = null;
         },
@@ -151,6 +177,16 @@ const applyFilters = () => {
         },
         { preserveState: true, preserveScroll: true, replace: true },
     );
+};
+
+const quickAdd = () => {
+    if (!quickForm.title) return;
+    quickForm.post(route('calendar.events.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            quickForm.reset('title', 'description', 'location', 'category');
+        },
+    });
 };
 
 const startEdit = (event) => {
@@ -193,6 +229,39 @@ const cancelEdit = () => {
 
         <div class="py-6">
             <div class="max-w-6xl mx-auto space-y-6">
+                <div class="bg-gradient-to-r from-teal-50 via-frost-50 to-indigo-50 border border-indigo-100 shadow rounded-lg p-4 flex flex-wrap gap-3 items-center justify-between">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <InputLabel class="text-slate-700" value="Quick add" />
+                        <TextInput
+                            class="w-56"
+                            placeholder="Title"
+                            v-model="quickForm.title"
+                        />
+                        <TextInput type="datetime-local" class="w-52" v-model="quickForm.start_at" />
+                        <TextInput type="datetime-local" class="w-52" v-model="quickForm.end_at" />
+                        <select
+                            v-model="quickForm.calendar_id"
+                            class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        >
+                            <option v-for="cal in calendars" :key="cal.id" :value="cal.id">
+                                {{ cal.name }}
+                            </option>
+                        </select>
+                        <select
+                            v-model.number="quickForm.reminder_offset_minutes"
+                            class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        >
+                            <option :value="15">15m</option>
+                            <option :value="30">30m</option>
+                            <option :value="60">1h</option>
+                            <option :value="120">2h</option>
+                        </select>
+                        <PrimaryButton :disabled="quickForm.processing" @click="quickAdd">Add</PrimaryButton>
+                    </div>
+                    <div class="text-xs text-slate-500">
+                        Default visibility household · reminders apply to all attendees
+                    </div>
+                </div>
                 <div class="bg-white shadow rounded-lg p-4 flex flex-wrap gap-4 items-center justify-between">
                     <div class="flex flex-wrap gap-3">
                         <div class="flex items-center gap-2" v-for="cal in calendars" :key="cal.id">
@@ -299,6 +368,21 @@ const cancelEdit = () => {
                             <InputError class="mt-1" :message="form.errors.visibility" />
                         </div>
                         <div>
+                            <InputLabel for="reminder_offset_minutes" value="Reminder" />
+                            <select
+                                id="reminder_offset_minutes"
+                                v-model.number="form.reminder_offset_minutes"
+                                class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            >
+                                <option :value="null">Default</option>
+                                <option :value="15">15m</option>
+                                <option :value="30">30m</option>
+                                <option :value="60">1h</option>
+                                <option :value="120">2h</option>
+                            </select>
+                            <InputError class="mt-1" :message="form.errors.reminder_offset_minutes" />
+                        </div>
+                        <div>
                             <InputLabel for="category" value="Category" />
                             <TextInput id="category" v-model="form.category" class="mt-1 block w-full" placeholder="school / work / medical" />
                             <InputError class="mt-1" :message="form.errors.category" />
@@ -389,6 +473,9 @@ const cancelEdit = () => {
                                     <div class="text-sm text-slate-600">
                                         {{ formatRange(event) }}
                                         <span v-if="event.location">· {{ event.location }}</span>
+                                        <span v-if="reminderLabel(event)" class="ml-2 text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                            {{ reminderLabel(event) }}
+                                        </span>
                                     </div>
                                     <div v-if="event.description" class="text-sm text-slate-500">
                                         {{ event.description }}
