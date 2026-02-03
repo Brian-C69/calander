@@ -22,6 +22,7 @@ const showForm = ref(false);
 const selectedCalendars = ref(props.filters.calendars?.length ? props.filters.calendars : props.calendars.map((c) => c.id));
 const category = ref(props.filters.category || '');
 const selectedAttendees = ref([]);
+const editingId = ref(null);
 
 const form = useForm({
     calendar_id: props.defaults.calendarId,
@@ -76,13 +77,20 @@ const eventsByDay = computed(() => {
 });
 
 const submit = () => {
-    form.post(route('calendar.events.store'), {
+    const payload = {
         preserveScroll: true,
         onSuccess: () => {
-            form.reset('title', 'description', 'location', 'is_all_day', 'category');
+            form.reset('title', 'description', 'location', 'is_all_day', 'category', 'attendees');
             showForm.value = false;
+            editingId.value = null;
         },
-    });
+    };
+
+    if (editingId.value) {
+        form.patch(route('calendar.events.update', editingId.value), payload);
+    } else {
+        form.post(route('calendar.events.store'), payload);
+    }
 };
 
 const deleteEvent = (id) => {
@@ -99,6 +107,31 @@ const applyFilters = () => {
         },
         { preserveState: true, preserveScroll: true, replace: true },
     );
+};
+
+const startEdit = (event) => {
+    editingId.value = event.id;
+    showForm.value = true;
+    form.calendar_id = event.calendar_id;
+    form.title = event.title;
+    form.description = event.description || '';
+    form.location = event.location || '';
+    form.start_at = event.start_at;
+    form.end_at = event.end_at;
+    form.is_all_day = event.is_all_day;
+    form.visibility = event.visibility || 'household';
+    form.category = event.category || '';
+    form.attendees = (event.attendees || []).map((a) => a.user_id || a.id);
+};
+
+const cancelEdit = () => {
+    editingId.value = null;
+    showForm.value = false;
+    form.reset('title', 'description', 'location', 'is_all_day', 'category', 'attendees');
+    form.calendar_id = props.defaults.calendarId;
+    form.start_at = props.defaults.start;
+    form.end_at = props.defaults.end;
+    form.visibility = 'household';
 };
 </script>
 
@@ -151,6 +184,12 @@ const applyFilters = () => {
                 </div>
 
                 <div v-if="showForm" class="bg-white shadow rounded-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-lg font-semibold text-slate-800">
+                            {{ editingId ? 'Edit Event' : 'Add Event' }}
+                        </div>
+                        <SecondaryButton type="button" @click="cancelEdit">Close</SecondaryButton>
+                    </div>
                     <div class="grid gap-4 md:grid-cols-2">
                         <div>
                             <InputLabel for="title" value="Title" />
@@ -232,8 +271,10 @@ const applyFilters = () => {
                         </div>
                     </div>
                     <div class="mt-6 flex items-center space-x-3">
-                        <PrimaryButton :disabled="form.processing" @click="submit">Save event</PrimaryButton>
-                        <SecondaryButton type="button" @click="showForm = false">Cancel</SecondaryButton>
+                        <PrimaryButton :disabled="form.processing" @click="submit">
+                            {{ editingId ? 'Update event' : 'Save event' }}
+                        </PrimaryButton>
+                        <SecondaryButton type="button" @click="cancelEdit">Cancel</SecondaryButton>
                         <span v-if="form.recentlySuccessful" class="text-sm text-green-600">Saved</span>
                     </div>
                 </div>
@@ -293,13 +334,22 @@ const applyFilters = () => {
                                         </span>
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    class="text-sm text-rose-600 hover:text-rose-700"
-                                    @click="deleteEvent(event.id)"
-                                >
-                                    Delete
-                                </button>
+                                <div class="flex gap-3 text-sm">
+                                    <button
+                                        type="button"
+                                        class="text-indigo-600 hover:text-indigo-700"
+                                        @click="startEdit(event)"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="text-rose-600 hover:text-rose-700"
+                                        @click="deleteEvent(event.id)"
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
