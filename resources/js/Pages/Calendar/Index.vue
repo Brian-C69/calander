@@ -22,6 +22,7 @@ const showForm = ref(false);
 const selectedCalendars = ref(props.filters.calendars?.length ? props.filters.calendars : props.calendars.map((c) => c.id));
 const category = ref(props.filters.category || '');
 const selectedAttendees = ref([]);
+const attendeeEntries = ref([]);
 const editingId = ref(null);
 const viewMode = ref('list'); // list | week | day
 const today = new Date();
@@ -128,6 +129,20 @@ const displayedEvents = computed(() => {
     return filteredEvents.value;
 });
 
+const hours = Array.from({ length: 16 }, (_, i) => i + 6); // 6 AM - 21
+
+const eventsByHour = computed(() => {
+    if (viewMode.value !== 'day') return [];
+    const buckets = {};
+    displayedEvents.value.forEach((event) => {
+        const start = new Date(event.start_at);
+        const hour = start.getHours();
+        buckets[hour] = buckets[hour] || [];
+        buckets[hour].push(event);
+    });
+    return hours.map((h) => ({ hour: h, items: buckets[h] || [] }));
+});
+
 const eventsByDay = computed(() => {
     const grouped = {};
     displayedEvents.value.forEach((event) => {
@@ -160,12 +175,18 @@ const eventsByDay = computed(() => {
 });
 
 const submit = () => {
+    form.attendees = attendeeEntries.value.map((a) => ({
+        user_id: a.user_id,
+        reminder_offset_minutes: a.reminder_offset_minutes,
+    }));
+
     const payload = {
         preserveScroll: true,
         onSuccess: () => {
             form.reset('title', 'description', 'location', 'is_all_day', 'category', 'attendees', 'reminder_offset_minutes');
             showForm.value = false;
             editingId.value = null;
+            attendeeEntries.value = [];
         },
     };
 
@@ -202,6 +223,30 @@ const quickAdd = () => {
     });
 };
 
+const isSelected = (memberId) => attendeeEntries.value.some((a) => a.user_id === memberId);
+
+const toggleAttendee = (memberId) => {
+    const idx = attendeeEntries.value.findIndex((a) => a.user_id === memberId);
+    if (idx >= 0) {
+        attendeeEntries.value.splice(idx, 1);
+    } else {
+        attendeeEntries.value.push({
+            user_id: memberId,
+            reminder_offset_minutes: form.reminder_offset_minutes ?? 60,
+        });
+    }
+};
+
+const updateAttendeeReminder = (memberId, value) => {
+    const idx = attendeeEntries.value.findIndex((a) => a.user_id === memberId);
+    const minutes = value ? Number(value) : null;
+    if (idx >= 0) {
+        attendeeEntries.value[idx].reminder_offset_minutes = minutes;
+    } else {
+        attendeeEntries.value.push({ user_id: memberId, reminder_offset_minutes: minutes });
+    }
+};
+
 const startEdit = (event) => {
     editingId.value = event.id;
     showForm.value = true;
@@ -214,7 +259,10 @@ const startEdit = (event) => {
     form.is_all_day = event.is_all_day;
     form.visibility = event.visibility || 'household';
     form.category = event.category || '';
-    form.attendees = (event.attendees || []).map((a) => a.user_id || a.id);
+    attendeeEntries.value = (event.attendees || []).map((a) => ({
+        user_id: a.user_id || a.id,
+        reminder_offset_minutes: a.reminder_offset_minutes ?? form.reminder_offset_minutes ?? 60,
+    }));
 };
 
 const cancelEdit = () => {
@@ -225,6 +273,7 @@ const cancelEdit = () => {
     form.start_at = props.defaults.start;
     form.end_at = props.defaults.end;
     form.visibility = 'household';
+    attendeeEntries.value = [];
 };
 </script>
 
@@ -408,20 +457,31 @@ const cancelEdit = () => {
                         <div class="md:col-span-2">
                             <InputLabel value="Attendees" />
                             <div class="flex flex-wrap gap-3 mt-2">
-                                <label
+                                <div
                                     v-for="member in members"
                                     :key="member.id"
-                                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-sm shadow-sm"
+                                    class="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm shadow-sm"
                                 >
                                     <input
                                         type="checkbox"
-                                        :value="member.id"
-                                        v-model="form.attendees"
                                         class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                        :checked="isSelected(member.id)"
+                                        @change="toggleAttendee(member.id)"
                                     />
                                     <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: member.avatar_color || '#14b8a6' }"></span>
                                     <span class="text-slate-700">{{ member.name }}</span>
-                                </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="5"
+                                        class="w-16 ml-2 rounded-md border-slate-200 text-xs focus:border-indigo-500 focus:ring-indigo-500"
+                                        placeholder="m"
+                                        :value="attendeeEntries.find((a) => a.user_id === member.id)?.reminder_offset_minutes ?? ''"
+                                        @input="updateAttendeeReminder(member.id, $event.target.value)"
+                                        :disabled="!isSelected(member.id)"
+                                    />
+                                    <span class="text-[11px] text-slate-500">m before</span>
+                                </div>
                             </div>
                             <InputError class="mt-1" :message="form.errors.attendees" />
                         </div>
@@ -457,68 +517,138 @@ const cancelEdit = () => {
                         </div>
                     </div>
 
-                    <div v-if="eventsByDay.length === 0" class="text-slate-500 text-sm bg-gradient-to-r from-slate-50 to-indigo-50 border border-indigo-100 rounded-lg p-4">
-                        No events in this view. Try switching the filter or add an event to get started.
-                    </div>
-
-                    <div v-for="[day, list] in eventsByDay" :key="day" class="mb-6 last:mb-0">
-                        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{{ day }}</div>
-                        <div class="space-y-3">
-                            <div
-                                v-for="event in list"
-                                :key="event.id"
-                                class="border border-slate-200 rounded-lg p-4 flex items-start justify-between"
-                            >
-                                <div class="space-y-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: event.calendar?.color || '#14b8a6' }"></span>
-                                        <div class="font-semibold text-slate-800">{{ event.title }}</div>
-                                        <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                                            {{ event.calendar?.name || 'Calendar' }}
-                                        </span>
-                                        <span v-if="event.category" class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                                            {{ event.category }}
-                                        </span>
-                                        <span v-if="event.conflict" class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                                            Conflict
-                                        </span>
-                                    </div>
-                                    <div class="text-sm text-slate-600">
-                                        {{ formatRange(event) }}
-                                        <span v-if="event.location">· {{ event.location }}</span>
-                                        <span v-if="reminderLabel(event)" class="ml-2 text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
-                                            {{ reminderLabel(event) }}
-                                        </span>
-                                    </div>
-                                    <div v-if="event.description" class="text-sm text-slate-500">
-                                        {{ event.description }}
-                                    </div>
-                                    <div v-if="event.attendees?.length" class="flex flex-wrap gap-2">
-                                        <span
-                                            v-for="att in event.attendees"
-                                            :key="att.id"
-                                            class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-slate-200 text-slate-700"
-                                        >
-                                            <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: att.user?.avatar_color || '#14b8a6' }"></span>
-                                            {{ att.user?.name || 'Member' }}
-                                        </span>
+                    <div v-if="viewMode === 'day'" class="space-y-3">
+                        <div v-if="eventsByDay.length === 0" class="text-slate-500 text-sm bg-gradient-to-r from-slate-50 to-indigo-50 border border-indigo-100 rounded-lg p-4">
+                            No events today. Add one to get started.
+                        </div>
+                        <div class="border border-slate-200 rounded-lg overflow-hidden">
+                            <div v-for="slot in eventsByHour" :key="slot.hour" class="flex border-b last:border-b-0 border-slate-100">
+                                <div class="w-24 px-3 py-3 text-sm text-slate-500 bg-slate-50 border-r border-slate-100">
+                                    {{ slot.hour.toString().padStart(2, '0') }}:00
+                                </div>
+                                <div class="flex-1 px-3 py-2 space-y-2">
+                                    <div
+                                        v-for="event in slot.items"
+                                        :key="event.id"
+                                        class="rounded-lg border border-slate-200 bg-gradient-to-r from-white to-indigo-50 px-3 py-2 shadow-sm flex items-start justify-between"
+                                    >
+                                        <div class="space-y-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: event.calendar?.color || '#14b8a6' }"></span>
+                                                <div class="font-semibold text-slate-800">{{ event.title }}</div>
+                                                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                                    {{ event.calendar?.name || 'Calendar' }}
+                                                </span>
+                                                <span v-if="event.category" class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                                                    {{ event.category }}
+                                                </span>
+                                                <span v-if="event.conflict" class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                                    Conflict
+                                                </span>
+                                            </div>
+                                            <div class="text-sm text-slate-600">
+                                                {{ formatRange(event) }}
+                                                <span v-if="event.location">· {{ event.location }}</span>
+                                                <span v-if="reminderLabel(event)" class="ml-2 text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                                    {{ reminderLabel(event) }}
+                                                </span>
+                                            </div>
+                                            <div v-if="event.attendees?.length" class="flex flex-wrap gap-2">
+                                                <span
+                                                    v-for="att in event.attendees"
+                                                    :key="att.id"
+                                                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-slate-200 text-slate-700"
+                                                >
+                                                    <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: att.user?.avatar_color || '#14b8a6' }"></span>
+                                                    {{ att.user?.name || 'Member' }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="flex gap-3 text-sm">
+                                            <button
+                                                type="button"
+                                                class="text-indigo-600 hover:text-indigo-700"
+                                                @click="startEdit(event)"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="text-rose-600 hover:text-rose-700"
+                                                @click="deleteEvent(event.id)"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="flex gap-3 text-sm">
-                                    <button
-                                        type="button"
-                                        class="text-indigo-600 hover:text-indigo-700"
-                                        @click="startEdit(event)"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="text-rose-600 hover:text-rose-700"
-                                        @click="deleteEvent(event.id)"
-                                    >
-                                        Delete
-                                    </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else>
+                        <div v-if="eventsByDay.length === 0" class="text-slate-500 text-sm bg-gradient-to-r from-slate-50 to-indigo-50 border border-indigo-100 rounded-lg p-4">
+                            No events in this view. Try switching the filter or add an event to get started.
+                        </div>
+                        <div v-for="[day, list] in eventsByDay" :key="day" class="mb-6 last:mb-0">
+                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{{ day }}</div>
+                            <div class="space-y-3">
+                                <div
+                                    v-for="event in list"
+                                    :key="event.id"
+                                    class="border border-slate-200 rounded-lg p-4 flex items-start justify-between bg-gradient-to-r from-white to-slate-50"
+                                >
+                                    <div class="space-y-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: event.calendar?.color || '#14b8a6' }"></span>
+                                            <div class="font-semibold text-slate-800">{{ event.title }}</div>
+                                            <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                                {{ event.calendar?.name || 'Calendar' }}
+                                            </span>
+                                            <span v-if="event.category" class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                                                {{ event.category }}
+                                            </span>
+                                            <span v-if="event.conflict" class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                                Conflict
+                                            </span>
+                                        </div>
+                                        <div class="text-sm text-slate-600">
+                                            {{ formatRange(event) }}
+                                            <span v-if="event.location">· {{ event.location }}</span>
+                                            <span v-if="reminderLabel(event)" class="ml-2 text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                                {{ reminderLabel(event) }}
+                                            </span>
+                                        </div>
+                                        <div v-if="event.description" class="text-sm text-slate-500">
+                                            {{ event.description }}
+                                        </div>
+                                        <div v-if="event.attendees?.length" class="flex flex-wrap gap-2">
+                                            <span
+                                                v-for="att in event.attendees"
+                                                :key="att.id"
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-slate-200 text-slate-700"
+                                            >
+                                                <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: att.user?.avatar_color || '#14b8a6' }"></span>
+                                                {{ att.user?.name || 'Member' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-3 text-sm">
+                                        <button
+                                            type="button"
+                                            class="text-indigo-600 hover:text-indigo-700"
+                                            @click="startEdit(event)"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="text-rose-600 hover:text-rose-700"
+                                            @click="deleteEvent(event.id)"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

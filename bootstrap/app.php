@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         //
+    })
+    ->withSchedule(function (Schedule $schedule): void {
+        // Reminder dispatcher (stub logging) – adjust cadence if needed
+        $schedule->command('events:dispatch-notifications')->everyFiveMinutes();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
