@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\EventController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -22,6 +23,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::get('/calendar', [EventController::class, 'index'])->name('calendar.index');
+    Route::post('/calendar/events', [EventController::class, 'store'])->name('calendar.events.store');
+    Route::patch('/calendar/events/{event}', [EventController::class, 'update'])->name('calendar.events.update');
+    Route::delete('/calendar/events/{event}', [EventController::class, 'destroy'])->name('calendar.events.destroy');
 });
 
 require __DIR__.'/auth.php';
