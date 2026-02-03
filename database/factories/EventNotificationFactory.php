@@ -1,0 +1,30 @@
+<?php
+
+namespace Database\Factories;
+
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+/**
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\EventNotification>
+ */
+class EventNotificationFactory extends Factory
+{
+    /**
+     * Define the model's default state.
+     *
+     * @return array<string, mixed>
+     */
+    public function definition(): array
+    {
+        return [
+            'user_id' => \App\Models\User::factory(),
+            'event_id' => \App\Models\Event::factory(),
+            'type' => $this->faker->randomElement(['reminder', 'change', 'cancel', 'digest']),
+            'send_at' => $this->faker->dateTimeBetween('now', '+2 days'),
+            'status' => 'pending',
+            'payload' => [
+                'message' => $this->faker->sentence(),
+            ],
+        ];
+    }
+}

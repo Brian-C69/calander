@@ -21,6 +21,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'household_id',
+        'role',
+        'avatar_color',
     ];
 
     /**
@@ -44,5 +47,25 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function household()
+    {
+        return $this->belongsTo(Household::class);
+    }
+
+    public function calendars()
+    {
+        return $this->hasMany(Calendar::class, 'owner_id');
+    }
+
+    public function calendarMemberships()
+    {
+        return $this->hasMany(CalendarMember::class);
+    }
+
+    public function eventsCreated()
+    {
+        return $this->hasMany(Event::class, 'creator_id');
     }
 }
