@@ -13,10 +13,13 @@ const props = defineProps({
     calendars: Array,
     events: Array,
     defaults: Object,
+    filters: Object,
     flash: Object,
 });
 
 const showForm = ref(false);
+const selectedCalendars = ref(props.filters.calendars?.length ? props.filters.calendars : props.calendars.map((c) => c.id));
+const category = ref(props.filters.category || '');
 
 const form = useForm({
     calendar_id: props.defaults.calendarId,
@@ -30,12 +33,41 @@ const form = useForm({
     category: '',
 });
 
+const filteredEvents = computed(() =>
+    props.events.filter((event) => {
+        const calendarOk = selectedCalendars.value.includes(event.calendar_id);
+        const categoryOk = category.value ? event.category === category.value : true;
+        return calendarOk && categoryOk;
+    }),
+);
+
 const eventsByDay = computed(() => {
     const grouped = {};
-    props.events.forEach((event) => {
+    filteredEvents.value.forEach((event) => {
         const day = event.start_at.split('T')[0];
         grouped[day] = grouped[day] || [];
         grouped[day].push(event);
+    });
+    // add conflict flags within each day
+    Object.values(grouped).forEach((list) => {
+        list.sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+        for (let i = 0; i < list.length; i++) {
+            const current = list[i];
+            const currentStart = new Date(current.start_at).getTime();
+            const currentEnd = new Date(current.end_at).getTime();
+            current.conflict = false;
+            for (let j = 0; j < list.length; j++) {
+                if (i === j) continue;
+                const other = list[j];
+                const otherStart = new Date(other.start_at).getTime();
+                const otherEnd = new Date(other.end_at).getTime();
+                const overlap = currentStart < otherEnd && otherStart < currentEnd;
+                if (overlap) {
+                    current.conflict = true;
+                    break;
+                }
+            }
+        }
     });
     return Object.entries(grouped).sort(([a], [b]) => (a > b ? 1 : -1));
 });
@@ -54,6 +86,17 @@ const deleteEvent = (id) => {
     if (!confirm('Delete this event?')) return;
     router.delete(route('calendar.events.destroy', id), { preserveScroll: true });
 };
+
+const applyFilters = () => {
+    router.get(
+        route('calendar.index'),
+        {
+            calendars: selectedCalendars.value,
+            category: category.value || undefined,
+        },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+};
 </script>
 
 <template>
@@ -70,6 +113,40 @@ const deleteEvent = (id) => {
 
         <div class="py-6">
             <div class="max-w-6xl mx-auto space-y-6">
+                <div class="bg-white shadow rounded-lg p-4 flex flex-wrap gap-4 items-center justify-between">
+                    <div class="flex flex-wrap gap-3">
+                        <div class="flex items-center gap-2" v-for="cal in calendars" :key="cal.id">
+                            <input
+                                type="checkbox"
+                                :id="`cal-${cal.id}`"
+                                :value="cal.id"
+                                v-model="selectedCalendars"
+                                class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                @change="applyFilters"
+                            />
+                            <label :for="`cal-${cal.id}`" class="flex items-center gap-2 text-sm text-slate-700">
+                                <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: cal.color || '#14b8a6' }"></span>
+                                {{ cal.name }}
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label for="category" class="text-sm text-slate-700">Category</label>
+                        <select
+                            id="category"
+                            v-model="category"
+                            @change="applyFilters"
+                            class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        >
+                            <option value="">All</option>
+                            <option value="school">School</option>
+                            <option value="work">Work</option>
+                            <option value="medical">Medical</option>
+                            <option value="errand">Errand</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div v-if="showForm" class="bg-white shadow rounded-lg p-6">
                     <div class="grid gap-4 md:grid-cols-2">
                         <div>
@@ -170,6 +247,9 @@ const deleteEvent = (id) => {
                                         </span>
                                         <span v-if="event.category" class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
                                             {{ event.category }}
+                                        </span>
+                                        <span v-if="event.conflict" class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                            Conflict
                                         </span>
                                     </div>
                                     <div class="text-sm text-slate-600">
