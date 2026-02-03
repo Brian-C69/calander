@@ -24,6 +24,7 @@ const category = ref(props.filters.category || '');
 const selectedAttendees = ref([]);
 const editingId = ref(null);
 const viewMode = ref('list'); // list | week | day
+const today = new Date();
 
 const fmtDate = new Intl.DateTimeFormat(undefined, {
     weekday: 'short',
@@ -52,7 +53,7 @@ const formatRange = (event) => {
 
 const reminderLabel = (event) => {
     const firstAtt = event.attendees?.[0];
-    const minutes = firstAtt?.reminder_offset_minutes ?? null;
+    const minutes = firstAtt?.reminder_offset_minutes ?? quickForm.reminder_offset_minutes ?? null;
     if (!minutes) return '';
     if (minutes >= 60) {
         const hrs = minutes / 60;
@@ -60,6 +61,18 @@ const reminderLabel = (event) => {
     }
     return `${minutes}m before`;
 };
+
+const viewLabel = computed(() => {
+    if (viewMode.value === 'day') {
+        return `Today · ${fmtDate.format(today)}`;
+    }
+    if (viewMode.value === 'week') {
+        const end = new Date();
+        end.setDate(end.getDate() + 7);
+        return `Next 7 days · ${fmtDate.format(today)} - ${fmtDate.format(end)}`;
+    }
+    return 'Upcoming events';
+});
 
 const form = useForm({
     calendar_id: props.defaults.calendarId,
@@ -398,7 +411,7 @@ const cancelEdit = () => {
                                 <label
                                     v-for="member in members"
                                     :key="member.id"
-                                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-sm"
+                                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-sm shadow-sm"
                                 >
                                     <input
                                         type="checkbox"
@@ -435,7 +448,7 @@ const cancelEdit = () => {
 
                 <div class="bg-white shadow rounded-lg p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-slate-800">Upcoming</h3>
+                        <h3 class="text-lg font-semibold text-slate-800">{{ viewLabel }}</h3>
                         <div class="flex flex-wrap gap-2">
                             <div v-for="cal in calendars" :key="cal.id" class="flex items-center gap-2 text-sm">
                                 <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: cal.color || '#14b8a6' }"></span>
