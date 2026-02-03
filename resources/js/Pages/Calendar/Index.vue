@@ -12,6 +12,7 @@ import Checkbox from '@/Components/Checkbox.vue';
 const props = defineProps({
     calendars: Array,
     events: Array,
+    members: Array,
     defaults: Object,
     filters: Object,
     flash: Object,
@@ -20,6 +21,7 @@ const props = defineProps({
 const showForm = ref(false);
 const selectedCalendars = ref(props.filters.calendars?.length ? props.filters.calendars : props.calendars.map((c) => c.id));
 const category = ref(props.filters.category || '');
+const selectedAttendees = ref([]);
 
 const form = useForm({
     calendar_id: props.defaults.calendarId,
@@ -31,6 +33,7 @@ const form = useForm({
     is_all_day: false,
     visibility: 'household',
     category: '',
+    attendees: [],
 });
 
 const filteredEvents = computed(() =>
@@ -197,6 +200,26 @@ const applyFilters = () => {
                             <InputError class="mt-1" :message="form.errors.location" />
                         </div>
                         <div class="md:col-span-2">
+                            <InputLabel value="Attendees" />
+                            <div class="flex flex-wrap gap-3 mt-2">
+                                <label
+                                    v-for="member in members"
+                                    :key="member.id"
+                                    class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-sm"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :value="member.id"
+                                        v-model="form.attendees"
+                                        class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: member.avatar_color || '#14b8a6' }"></span>
+                                    <span class="text-slate-700">{{ member.name }}</span>
+                                </label>
+                            </div>
+                            <InputError class="mt-1" :message="form.errors.attendees" />
+                        </div>
+                        <div class="md:col-span-2">
                             <InputLabel for="description" value="Notes" />
                             <textarea
                                 id="description"
@@ -258,6 +281,16 @@ const applyFilters = () => {
                                     </div>
                                     <div v-if="event.description" class="text-sm text-slate-500">
                                         {{ event.description }}
+                                    </div>
+                                    <div v-if="event.attendees?.length" class="flex flex-wrap gap-2">
+                                        <span
+                                            v-for="att in event.attendees"
+                                            :key="att.id"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-slate-200 text-slate-700"
+                                        >
+                                            <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: att.user?.avatar_color || '#14b8a6' }"></span>
+                                            {{ att.user?.name || 'Member' }}
+                                        </span>
                                     </div>
                                 </div>
                                 <button
