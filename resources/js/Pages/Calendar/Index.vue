@@ -23,6 +23,32 @@ const selectedCalendars = ref(props.filters.calendars?.length ? props.filters.ca
 const category = ref(props.filters.category || '');
 const selectedAttendees = ref([]);
 const editingId = ref(null);
+const viewMode = ref('list'); // list | week | day
+
+const fmtDate = new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+});
+const fmtTime = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+});
+
+const formatRange = (event) => {
+    const start = new Date(event.start_at);
+    const end = new Date(event.end_at);
+
+    if (event.is_all_day) {
+        return `${fmtDate.format(start)} · All day`;
+    }
+
+    const sameDay = start.toDateString() === end.toDateString();
+    if (sameDay) {
+        return `${fmtDate.format(start)} · ${fmtTime.format(start)} → ${fmtTime.format(end)}`;
+    }
+    return `${fmtDate.format(start)} ${fmtTime.format(start)} → ${fmtDate.format(end)} ${fmtTime.format(end)}`;
+};
 
 const form = useForm({
     calendar_id: props.defaults.calendarId,
@@ -45,9 +71,27 @@ const filteredEvents = computed(() =>
     }),
 );
 
+const displayedEvents = computed(() => {
+    if (viewMode.value === 'day') {
+        const today = new Date();
+        const dayKey = today.toISOString().split('T')[0];
+        return filteredEvents.value.filter((e) => e.start_at.startsWith(dayKey));
+    }
+    if (viewMode.value === 'week') {
+        const start = new Date();
+        const end = new Date();
+        end.setDate(end.getDate() + 7);
+        return filteredEvents.value.filter((e) => {
+            const d = new Date(e.start_at);
+            return d >= start && d <= end;
+        });
+    }
+    return filteredEvents.value;
+});
+
 const eventsByDay = computed(() => {
     const grouped = {};
-    filteredEvents.value.forEach((event) => {
+    displayedEvents.value.forEach((event) => {
         const day = event.start_at.split('T')[0];
         grouped[day] = grouped[day] || [];
         grouped[day].push(event);
@@ -180,6 +224,32 @@ const cancelEdit = () => {
                             <option value="medical">Medical</option>
                             <option value="errand">Errand</option>
                         </select>
+                        <div class="flex gap-2 ml-4">
+                            <button
+                                type="button"
+                                class="text-sm px-3 py-1 rounded-full border"
+                                :class="viewMode === 'list' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-700'"
+                                @click="viewMode = 'list'"
+                            >
+                                List
+                            </button>
+                            <button
+                                type="button"
+                                class="text-sm px-3 py-1 rounded-full border"
+                                :class="viewMode === 'week' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-700'"
+                                @click="viewMode = 'week'"
+                            >
+                                Week
+                            </button>
+                            <button
+                                type="button"
+                                class="text-sm px-3 py-1 rounded-full border"
+                                :class="viewMode === 'day' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-700'"
+                                @click="viewMode = 'day'"
+                            >
+                                Day
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -290,8 +360,8 @@ const cancelEdit = () => {
                         </div>
                     </div>
 
-                    <div v-if="eventsByDay.length === 0" class="text-slate-500 text-sm">
-                        No events yet. Add one to get started.
+                    <div v-if="eventsByDay.length === 0" class="text-slate-500 text-sm bg-gradient-to-r from-slate-50 to-indigo-50 border border-indigo-100 rounded-lg p-4">
+                        No events in this view. Try switching the filter or add an event to get started.
                     </div>
 
                     <div v-for="[day, list] in eventsByDay" :key="day" class="mb-6 last:mb-0">
@@ -317,7 +387,7 @@ const cancelEdit = () => {
                                         </span>
                                     </div>
                                     <div class="text-sm text-slate-600">
-                                        {{ event.start_at }} → {{ event.end_at }}
+                                        {{ formatRange(event) }}
                                         <span v-if="event.location">· {{ event.location }}</span>
                                     </div>
                                     <div v-if="event.description" class="text-sm text-slate-500">
