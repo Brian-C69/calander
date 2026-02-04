@@ -24,7 +24,7 @@ const category = ref(props.filters.category || '');
 const selectedAttendees = ref([]);
 const attendeeEntries = ref([]);
 const editingId = ref(null);
-const viewMode = ref('list'); // list | week | day
+const viewMode = ref('list'); // list | week | day | month
 const today = new Date();
 
 const fmtDate = new Intl.DateTimeFormat(undefined, {
@@ -71,6 +71,10 @@ const viewLabel = computed(() => {
         const end = new Date();
         end.setDate(end.getDate() + 7);
         return `Next 7 days · ${fmtDate.format(today)} - ${fmtDate.format(end)}`;
+    }
+    if (viewMode.value === 'month') {
+        const monthName = today.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+        return `Month · ${monthName}`;
     }
     return 'Upcoming events';
 });
@@ -210,6 +214,38 @@ const eventsByWeekDay = computed(() => {
         ...day,
         items: map[day.key] || [],
     }));
+});
+
+const monthGrid = computed(() => {
+    if (viewMode.value !== 'month') return [];
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const start = new Date(first);
+    start.setDate(first.getDate() - first.getDay()); // back to Sunday
+    const weeks = [];
+    const map = {};
+    displayedEvents.value.forEach((event) => {
+        const key = event.start_at.split('T')[0];
+        map[key] = map[key] || [];
+        map[key].push(event);
+    });
+    for (let w = 0; w < 6; w++) {
+        const days = [];
+        for (let d = 0; d < 7; d++) {
+            const cellDate = new Date(start);
+            cellDate.setDate(start.getDate() + w * 7 + d);
+            const key = cellDate.toISOString().split('T')[0];
+            const isCurrentMonth = cellDate.getMonth() === now.getMonth();
+            days.push({
+                key,
+                label: cellDate.getDate(),
+                isCurrentMonth,
+                events: map[key] || [],
+            });
+        }
+        weeks.push(days);
+    }
+    return weeks;
 });
 
 const submit = () => {
@@ -405,6 +441,14 @@ const cancelEdit = () => {
                             <button
                                 type="button"
                                 class="text-sm px-3 py-1 rounded-full border"
+                                :class="viewMode === 'month' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-700'"
+                                @click="viewMode = 'month'"
+                            >
+                                Month
+                            </button>
+                            <button
+                                type="button"
+                                class="text-sm px-3 py-1 rounded-full border"
                                 :class="viewMode === 'week' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-700'"
                                 @click="viewMode = 'week'"
                             >
@@ -555,7 +599,55 @@ const cancelEdit = () => {
                         </div>
                     </div>
 
-                    <div v-if="viewMode === 'day'" class="space-y-3">
+                    <div v-if="viewMode === 'month'" class="space-y-2">
+                        <div class="grid grid-cols-7 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                            <div class="py-2 text-center" v-for="day in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="day">
+                                {{ day }}
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-7 gap-2">
+                            <div
+                                v-for="(week, wi) in monthGrid"
+                                :key="`week-${wi}`"
+                                class="contents"
+                            >
+                                <div
+                                    v-for="cell in week"
+                                    :key="cell.key"
+                                    class="min-h-24 border border-slate-200 rounded-lg p-2 flex flex-col gap-2 bg-white"
+                                    :class="cell.isCurrentMonth ? '' : 'bg-slate-50 text-slate-400'"
+                                >
+                                    <div class="text-xs font-semibold text-slate-700 flex items-center gap-2">
+                                        <span class="h-2 w-2 rounded-full" :class="cell.isCurrentMonth ? 'bg-indigo-200' : 'bg-slate-300'"></span>
+                                        {{ cell.label }}
+                                    </div>
+                                    <div class="flex flex-col gap-1">
+                                        <div
+                                            v-for="event in cell.events"
+                                            :key="event.id"
+                                            class="inline-flex items-center gap-2 px-2 py-1 rounded-md border border-slate-200 text-xs bg-gradient-to-r from-white to-indigo-50"
+                                        >
+                                            <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: event.calendar?.color || '#14b8a6' }"></span>
+                                            <span class="font-semibold text-slate-800 truncate">{{ event.title }}</span>
+                                            <span v-if="event.attendees?.length" class="flex -space-x-1">
+                                                <span
+                                                    v-for="att in event.attendees.slice(0,3)"
+                                                    :key="att.id"
+                                                    class="h-5 w-5 rounded-full border border-white text-[10px] bg-slate-200 flex items-center justify-center"
+                                                    :style="{ backgroundColor: att.user?.avatar_color || '#cbd5e1', color: '#0f172a' }"
+                                                >
+                                                    {{ att.user?.name?.charAt(0)?.toUpperCase() || 'A' }}
+                                                </span>
+                                                <span v-if="event.attendees.length > 3" class="text-[10px] text-slate-500 px-1">+{{ event.attendees.length - 3 }}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else-if="viewMode === 'day'" class="space-y-3">
                         <div v-if="eventsByDay.length === 0" class="text-slate-500 text-sm bg-gradient-to-r from-slate-50 to-indigo-50 border border-indigo-100 rounded-lg p-4">
                             No events today. Add one to get started.
                         </div>
