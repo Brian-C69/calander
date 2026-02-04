@@ -130,6 +130,17 @@ const displayedEvents = computed(() => {
 });
 
 const hours = Array.from({ length: 16 }, (_, i) => i + 6); // 6 AM - 21
+const weekDays = computed(() => {
+    const start = new Date();
+    return Array.from({ length: 7 }, (_, idx) => {
+        const d = new Date(start);
+        d.setDate(start.getDate() + idx);
+        return {
+            key: d.toISOString().split('T')[0],
+            label: fmtDate.format(d),
+        };
+    });
+});
 
 const eventsByHour = computed(() => {
     if (viewMode.value !== 'day') return [];
@@ -172,6 +183,33 @@ const eventsByDay = computed(() => {
         }
     });
     return Object.entries(grouped).sort(([a], [b]) => (a > b ? 1 : -1));
+});
+
+const eventsByWeekDay = computed(() => {
+    if (viewMode.value !== 'week') return [];
+    const map = {};
+    displayedEvents.value.forEach((event) => {
+        const key = event.start_at.split('T')[0];
+        map[key] = map[key] || [];
+        map[key].push(event);
+    });
+    Object.values(map).forEach((list) => {
+        list.sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+        list.forEach((ev, i) => {
+            const start = new Date(ev.start_at).getTime();
+            const end = new Date(ev.end_at).getTime();
+            ev.conflict = list.some((other, j) => {
+                if (i === j) return false;
+                const os = new Date(other.start_at).getTime();
+                const oe = new Date(other.end_at).getTime();
+                return start < oe && os < end;
+            });
+        });
+    });
+    return weekDays.value.map((day) => ({
+        ...day,
+        items: map[day.key] || [],
+    }));
 });
 
 const submit = () => {
