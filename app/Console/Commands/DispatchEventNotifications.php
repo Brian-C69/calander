@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\EventNotification;
+use App\Jobs\SendEventReminder;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -38,15 +39,8 @@ class DispatchEventNotifications extends Command
             ->get();
 
         foreach ($pending as $notification) {
-            // Stub: log instead of sending email/push.
-            Log::info('Dispatching event reminder', [
-                'user_id' => $notification->user_id,
-                'event_id' => $notification->event_id,
-                'title' => $notification->event?->title,
-                'send_at' => $notification->send_at,
-            ]);
-
-            $notification->update(['status' => 'sent']);
+            // Queue a reminder job (stub logs). Replace with Mail/Push as needed.
+            SendEventReminder::dispatch($notification);
         }
 
         $this->info("Processed {$pending->count()} reminders");

@@ -614,12 +614,17 @@ const cancelEdit = () => {
                                 <div
                                     v-for="cell in week"
                                     :key="cell.key"
-                                    class="min-h-24 border border-slate-200 rounded-lg p-2 flex flex-col gap-2 bg-white"
+                                    class="min-h-28 border border-slate-200 rounded-lg p-2 flex flex-col gap-2 bg-white"
                                     :class="cell.isCurrentMonth ? '' : 'bg-slate-50 text-slate-400'"
                                 >
-                                    <div class="text-xs font-semibold text-slate-700 flex items-center gap-2">
-                                        <span class="h-2 w-2 rounded-full" :class="cell.isCurrentMonth ? 'bg-indigo-200' : 'bg-slate-300'"></span>
-                                        {{ cell.label }}
+                                    <div class="text-xs font-semibold text-slate-700 flex items-center justify-between gap-2">
+                                        <span class="flex items-center gap-2">
+                                            <span class="h-2 w-2 rounded-full" :class="cell.isCurrentMonth ? 'bg-indigo-200' : 'bg-slate-300'"></span>
+                                            {{ cell.label }}
+                                        </span>
+                                        <span v-if="cell.events.length" class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                                            {{ cell.events.length }}
+                                        </span>
                                     </div>
                                     <div class="flex flex-col gap-1">
                                         <div
