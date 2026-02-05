@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\PushSubscriptionController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -28,6 +29,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/calendar/events', [EventController::class, 'store'])->name('calendar.events.store');
     Route::patch('/calendar/events/{event}', [EventController::class, 'update'])->name('calendar.events.update');
     Route::delete('/calendar/events/{event}', [EventController::class, 'destroy'])->name('calendar.events.destroy');
+
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
+    Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy'])->name('push-subscriptions.destroy');
 });
 
 require __DIR__.'/auth.php';

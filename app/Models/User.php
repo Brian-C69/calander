@@ -68,4 +68,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Event::class, 'creator_id');
     }
+
+    public function pushSubscriptions()
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
 }
