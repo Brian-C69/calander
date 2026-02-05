@@ -652,6 +652,59 @@ const cancelEdit = () => {
                         </div>
                     </div>
 
+                    <div v-else-if="viewMode === 'week'" class="space-y-3">
+                        <div v-if="eventsByWeekDay.every((d) => d.items.length === 0)" class="text-slate-500 text-sm bg-gradient-to-r from-slate-50 to-indigo-50 border border-indigo-100 rounded-lg p-4">
+                            No events this week. Add one to get started.
+                        </div>
+                        <div class="grid grid-cols-7 gap-3">
+                            <div
+                                v-for="day in eventsByWeekDay"
+                                :key="day.key"
+                                class="border border-slate-200 rounded-lg p-2 bg-white flex flex-col gap-2 min-h-40"
+                            >
+                                <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                                    <span>{{ day.label }}</span>
+                                    <span v-if="day.items.length" class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px]">{{ day.items.length }}</span>
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <div
+                                        v-for="event in day.items"
+                                        :key="event.id"
+                                        class="rounded-md border border-slate-200 bg-gradient-to-r from-white to-indigo-50 px-2 py-1 text-xs flex flex-col gap-1 shadow-sm"
+                                    >
+                                        <div class="flex items-center gap-2">
+                                            <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: event.calendar?.color || '#14b8a6' }"></span>
+                                            <span class="font-semibold text-slate-800 truncate">{{ event.title }}</span>
+                                            <span v-if="event.conflict" class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Conflict</span>
+                                        </div>
+                                        <div class="text-slate-600">
+                                            {{ formatRange(event) }}
+                                        </div>
+                                        <div class="flex flex-wrap gap-1">
+                                            <span v-if="event.category" class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{{ event.category }}</span>
+                                            <span v-if="reminderLabel(event)" class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">{{ reminderLabel(event) }}</span>
+                                        </div>
+                                        <div v-if="event.attendees?.length" class="flex flex-wrap gap-1">
+                                            <span
+                                                v-for="att in event.attendees.slice(0,3)"
+                                                :key="att.id"
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-slate-200 text-[11px] text-slate-700"
+                                            >
+                                                <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: att.user?.avatar_color || '#14b8a6' }"></span>
+                                                {{ att.user?.name || 'Member' }}
+                                            </span>
+                                            <span v-if="event.attendees.length > 3" class="text-[11px] text-slate-500 px-1">+{{ event.attendees.length - 3 }}</span>
+                                        </div>
+                                        <div class="flex gap-2 text-[11px]">
+                                            <button class="text-indigo-600 hover:text-indigo-700" type="button" @click="startEdit(event)">Edit</button>
+                                            <button class="text-rose-600 hover:text-rose-700" type="button" @click="deleteEvent(event.id)">Delete</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div v-else-if="viewMode === 'day'" class="space-y-3">
                         <div v-if="eventsByDay.length === 0" class="text-slate-500 text-sm bg-gradient-to-r from-slate-50 to-indigo-50 border border-indigo-100 rounded-lg p-4">
                             No events today. Add one to get started.
